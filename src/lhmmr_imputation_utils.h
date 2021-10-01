@@ -11,23 +11,6 @@ struct t_IMPUTE2_op_col_info
 enum { MATCH_BY_NAME, MATCH_BY_START_POSN, N_MATCH_BY_IDS };
 char** get_match_by_identifiers();
 
-void resample_phased_haplotypes_per_recombination_rates(char* haplocoded_genotype_matrix_fp,
-	char* sample_ids_list_fp,
-	char* recombination_rate_dir,
-	double upsampling_rate,
-	double N_e,
-	double allele_error_prob,
-	char* op_fp);
-
-void resample_phased_haplotypes_per_recombination_rates_multithreaded(char* haplocoded_genotype_matrix_fp,
-	char* sample_ids_list_fp,
-	char* recombination_rate_dir,
-	double upsampling_rate,
-	double N_e,
-	double allele_error_prob,
-	int n_threads,
-	char* op_fp);
-
 vector<double*>* get_unique_haplotypes(vector<double*>* lowMAF_containing_haplotypes, vector<int>* n_cnt_per_uniq_haplotypes);
 
 void count_unique_haplotypes(vector<double*>* lowMAF_containing_haplotypes, vector<int>* n_cnt_per_uniq_haplotypes);
@@ -43,41 +26,6 @@ void get_unique_haplotype_indices(vector<double*>* haplotype_alleles, vector<vec
 
 void update_parents_2_child_imputed_genotype_probabilities(char* trio_list_fp, char* genocoded_genotype_matrix_fp, char* sample_ids_list_fp,
 															char* imputed_geno_signals_matrix_fp, char* imputed_signal_sample_ids_list_fp);
-
-void assign_haplotype_consistency_scores_per_low_MAF_imputations(char* train_tag_haplocoded_genotype_matrix_fp,
-	char* train_target_haplocoded_genotype_matrix_fp,
-	char* train_sample_ids_list_fp,
-	char* imp_tag_genocoded_genotype_matrix_fp,
-	char* imp_target_genocoded_genotype_matrix_fp,
-	char* imp_sample_ids_list_fp,
-	char* test_tag_genocoded_genotype_matrix_fp,
-	char* test_target_genocoded_genotype_matrix_fp,
-	char* test_sample_ids_list_fp,
-	int n_vic_vars);
-
-void assign_haplotype_consistency_scores_per_low_MAF_imputation_signal(char* train_tag_haplocoded_genotype_matrix_fp,
-	char* train_target_haplocoded_genotype_matrix_fp,
-	char* train_sample_ids_list_fp,
-	char* imp_tag_genocoded_genotype_matrix_fp,
-	char* imp_target_genocoded_genotype_matrix_fp,
-	char* imp_target_geno_signal_matrix_fp,
-	char* imp_sample_ids_list_fp,
-	char* test_tag_genocoded_genotype_matrix_fp,
-	char* test_target_genocoded_genotype_matrix_fp,
-	char* test_sample_ids_list_fp,
-	int n_vic_vars);
-
-void assign_posterior_haplotype_consistency_scores_per_imputation_signal(char* train_tag_haplocoded_genotype_matrix_fp,
-	char* train_target_haplocoded_genotype_matrix_fp,
-	char* train_sample_ids_list_fp,
-	char* imp_tag_genocoded_genotype_matrix_fp,
-	char* imp_target_geno_signal_matrix_fp,
-	char* imp_sample_ids_list_fp,
-	char* test_target_genocoded_genotype_matrix_fp,
-	char* test_sample_ids_list_fp,
-	double exponential_allelic_prior_weight,
-	int n_vic_vars,
-	char* probs_5col_fp);
 
 void compute_imputation_stats_per_5col_genotype_probs_w_PR_curve_info(char* imputed_chr_id,
 	char* imputed_5col_genotype_probs_fp,

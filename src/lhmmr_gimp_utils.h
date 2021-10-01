@@ -112,6 +112,9 @@ void run_Imputation_Viterbi_Full_States_Sliding_Windows_State_Pruning(char* refe
 void get_R2_per_imputed_genotypes(char* imputed_genotypes_fp, char* imputed_sample_ids_list_fp,
 	char* known_genotypes_fp, char* known_sample_ids_list_fp);
 
+void get_R2_per_imputed_genotypes_signal_level(char* imputed_genotypes_fp, char* imputed_sample_ids_list_fp,
+	char* known_genotypes_fp, char* known_sample_ids_list_fp, char* stats_op_fp);
+
 void get_R2_per_GIMP_4entry_allelic_probs(char* imputed_genotypes_fp, char* imputed_sample_ids_list_fp,
 	char* known_genotypes_fp, char* known_sample_ids_list_fp);
 

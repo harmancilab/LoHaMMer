@@ -7,6 +7,7 @@
 #include "lhmmr_imputation_utils.h"
 #include "lhmmr_ansi_string.h"
 #include "lhmmr_annot_region_tools.h"
+#include "lhmmr_signal_track_tools.h"
 #include "lhmmr_file_utils.h"
 #include "lhmmr_nucleotide.h"
 #include "lhmmr_xlog_math.h"
@@ -3352,6 +3353,133 @@ void get_PR_stats_per_GIMP_4entry_allelic_probs(char* imputed_genotypes_fp, char
 	} // i_bin loop.
 	fclose(f_op);
 }
+
+
+void get_R2_per_imputed_genotypes_signal_level(char* imputed_genotypes_fp, char* imputed_sample_ids_list_fp,
+	char* known_genotypes_fp, char* known_sample_ids_list_fp, char* stats_op_fp)
+{
+	vector<t_annot_region*>* known_genotype_regs = load_variant_signal_regions_wrapper(known_genotypes_fp, known_sample_ids_list_fp);
+	vector<char*>* known_sample_ids = buffer_file(known_sample_ids_list_fp);
+	fprintf(stderr, "Loaded %d known genotype regions for %d samples.\n", known_genotype_regs->size(), known_sample_ids->size());
+	t_restr_annot_region_list* restr_known_genotype_regs = restructure_annot_regions(known_genotype_regs);
+
+	vector<char*>* imputed_sample_ids = buffer_file(imputed_sample_ids_list_fp);
+	fprintf(stderr, "Loaded %d imputed sample ids\n", imputed_sample_ids->size());
+
+	int n_loaded_samples = 0;
+	vector<t_annot_region*>* imputed_genotype_regs = load_signal_regs_BED(imputed_genotypes_fp, n_loaded_samples);
+	fprintf(stderr, "Loaded %d imputed variants.\n", imputed_genotype_regs->size());
+	for (int i_reg = 0; i_reg < imputed_genotype_regs->size(); i_reg++)
+	{
+		imputed_genotype_regs->at(i_reg)->score = 0;
+		double* cur_reg_imp_sig = (double*)(imputed_genotype_regs->at(i_reg)->data);
+		void** cur_reg_info = new void*[2];
+		cur_reg_info[0] = cur_reg_imp_sig;
+		imputed_genotype_regs->at(i_reg)->data = cur_reg_info;
+	} // i_reg loop.
+	t_restr_annot_region_list* restr_imputed_genotype_regs = restructure_annot_regions(imputed_genotype_regs);
+
+	// Set the mapping between sample id's.
+	vector<int>* imp_2_known_sample_i = new vector<int>();
+	int n_matched_samples = 0;
+	for (int imp_i = 0; imp_i < imputed_sample_ids->size(); imp_i++)
+	{
+		int cur_imp_known_i = t_string::get_i_str(known_sample_ids, imputed_sample_ids->at(imp_i));
+		if (cur_imp_known_i < known_sample_ids->size())
+		{
+			n_matched_samples++;
+		}
+		imp_2_known_sample_i->push_back(cur_imp_known_i);
+	} // imp_i loop.
+	fprintf(stderr, "Matched %d samples.\n", n_matched_samples);
+
+	FILE* f_op = open_f(stats_op_fp, "w");
+	for (int i_chr = 0; i_chr < restr_known_genotype_regs->chr_ids->size(); i_chr++)
+	{
+		fprintf(stderr, "Intersecting known regions with imputed regions.\n");
+
+		// Intersect and process.
+		double** known_imp_sample_geno = new double*[2];
+		known_imp_sample_geno[0] = new double[n_matched_samples + 2];
+		known_imp_sample_geno[1] = new double[n_matched_samples + 2];
+		vector<t_annot_region*>* intersects = intersect_annot_regions(imputed_genotype_regs, known_genotype_regs, true);
+		fprintf(stderr, "Found %d intersections\n", intersects->size());
+		int n_processed_imputed_targets = 0;
+		for (int i_int = 0; i_int < intersects->size(); i_int++)
+		{
+			if (i_int % 1000 == 0)
+			{
+				fprintf(stderr, "@ %d. intersect         \r", i_int);
+			}
+
+			t_intersect_info* int_info = (t_intersect_info*)(intersects->at(i_int)->data);
+			t_annot_region* imp_reg = int_info->src_reg;
+			t_annot_region* known_reg = int_info->dest_reg;
+
+			void** known_reg_info = (void**)(known_reg->data);
+			char* known_reg_geno = (char*)(known_reg_info[0]);
+
+			void** imp_reg_info = (void**)(imp_reg->data);
+			double* imp_reg_geno = (double*)(imp_reg_info[0]);
+
+			//if (t_string::compare_strings(imp_reg->name, known_reg->name) &&
+			if(imp_reg->score == 0)
+			{
+				imp_reg->score = 1;
+				n_processed_imputed_targets++;
+
+				double total_n_non_refs = 0;
+				double n_matching_non_refs = 0;
+				double n_matching_all = 0;
+				double n_all = 0;
+
+				int geno_i = 0;
+				for (int imp_i = 0; imp_i < imputed_sample_ids->size(); imp_i++)
+				{
+					if (imp_2_known_sample_i->at(imp_i) < known_sample_ids->size())
+					{
+						double known_geno = (double)(known_reg_geno[imp_2_known_sample_i->at(imp_i)]);
+						double imp_geno = (double)(imp_reg_geno[imp_i]);
+						known_imp_sample_geno[0][geno_i] = known_geno;
+						known_imp_sample_geno[1][geno_i] = imp_geno;
+						geno_i++;
+
+						// Update non-ref concordance.
+						if (known_geno > 0)
+						{
+							if (known_geno == imp_geno)
+							{
+								n_matching_non_refs++;
+							}
+
+							total_n_non_refs++;
+						}
+
+						// Update all concordance.
+						if (known_geno == imp_geno)
+						{
+							n_matching_all++;
+						}
+						n_all++;
+					} // matching check.
+				} // imp_i loop.			
+
+				double cur_geno_corr = 0;
+				get_correlation(known_imp_sample_geno[0], known_imp_sample_geno[1], geno_i, cur_geno_corr);
+
+				fprintf(f_op, "%s\t%d\t%d\t%s\t%.4f\t%.0f\t%.0f\t%.0f\t%.0f\n", imp_reg->chrom,
+					translate_coord(imp_reg->start, CODEBASE_COORDS::start_base, BED_COORDS::start_base),
+					translate_coord(imp_reg->end, CODEBASE_COORDS::end_base, BED_COORDS::end_base),
+					imp_reg->name, cur_geno_corr * cur_geno_corr,
+					n_matching_all, n_all,
+					n_matching_non_refs, total_n_non_refs);
+			} // overlapping region name comparison.
+		} // i_int loop.	
+	} // i_chr loop.
+	fclose(f_op);
+	fprintf(stderr, "\nDone.\n");
+} // get_R2_per_imputed_genotypes function.
+
 
 void get_R2_per_imputed_genotypes(char* imputed_genotypes_fp, char* imputed_sample_ids_list_fp,
 	char* known_genotypes_fp, char* known_sample_ids_list_fp)

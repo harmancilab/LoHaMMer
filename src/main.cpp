@@ -4,6 +4,7 @@
 #include <math.h>
 #include "lhmmr_file_utils.h"
 #include "lhmmr_gimp_utils.h"
+#include "lhmmr_ansi_cli.h"
 #include "lhmmr_variation_tools.h"
 #include "lhmmr_annot_region_tools.h"
 #include "lhmmr_ansi_string.h"
@@ -27,6 +28,7 @@ Imputation HMM:\n\
 Accuracy Evaluation:\n\
 	-get_R2_per_GIMP_4entry_allelic_probs\n\
 	-get_R2_per_imputed_genotypes\n\
+	-get_R2_per_imputed_genotypes_signal_level\n\
 	-get_PR_stats_per_GIMP_4entry_allelic_probs\n\
 	-get_PR_stats_per_3entry_genotype_probs\n", argv[0]);
 
@@ -35,6 +37,74 @@ Accuracy Evaluation:\n\
 
 	clock_t start_c = clock();
 
+	if (strcmp(argv[1], "-get_R2_per_imputed_genotypes_signal_level") == 0)
+	{
+		if (argc < 6)
+		{
+			fprintf(stderr, "USAGE: %s %s --imputed_dir [Imputed genotypes directory] --known_dir [Known genotypes directory]\n", argv[0], argv[1]);
+			exit(0);
+		}
+
+		t_ansi_cli* cli = new t_ansi_cli(argc, argv, "--");
+		bool res = false;
+
+		char* imputed_dir = t_string::copy_me_str(cli->get_value_by_option("--imputed_dir", res));
+		if (!res)
+		{
+			fprintf(stderr, "Need to specify the output directory with \"--imputed_dir\"\n");
+			exit(0);
+		}
+
+		char* known_dir = t_string::copy_me_str(cli->get_value_by_option("--known_dir", res));
+		if (!res)
+		{
+			fprintf(stderr, "Need to specify the model parameters directory with \"--known_dir\"\n");
+			exit(0);
+		}
+
+		char imp_samples_list_fp[1000];
+		sprintf(imp_samples_list_fp, "%s/sample_ids.list", imputed_dir);
+		if (!check_file(imp_samples_list_fp))
+		{
+			fprintf(stderr, "Could not find imputed sample id's @ %s\n", imp_samples_list_fp);
+			exit(0);
+		}
+
+		char known_samples_list_fp[1000];
+		sprintf(known_samples_list_fp, "%s/sample_ids.list", known_dir);
+		if (!check_file(known_samples_list_fp))
+		{
+			fprintf(stderr, "Could not find known sample id's @ %s\n", known_samples_list_fp);
+			exit(0);
+		}
+
+		char chr_ids_list_fp[1000];
+		sprintf(chr_ids_list_fp, "%s/chr_ids.list", imputed_dir);
+
+		if (!check_file(chr_ids_list_fp))
+		{
+			fprintf(stderr, "Could not fine the chromosome id's @ %s\n", chr_ids_list_fp);
+			exit(0);
+		}
+
+		vector<char*>* chr_ids = buffer_file(chr_ids_list_fp);
+		fprintf(stderr, "Loaded %d chromosomes.\n", chr_ids->size());
+
+		// Process the chromosomes in order.		
+		for (int i_chr = 0; i_chr < chr_ids->size(); i_chr++)
+		{
+			char cur_chr_imp_geno_fp[1000];
+			sprintf(cur_chr_imp_geno_fp, "%s/%s.imp", imputed_dir, chr_ids->at(i_chr));
+
+			char cur_chr_known_geno_fp[1000];
+			sprintf(cur_chr_known_geno_fp, "%s/%s.matbed", known_dir, chr_ids->at(i_chr));
+
+			char stats_fp[1000];
+			sprintf(stats_fp, "R2_stats_%s.txt", chr_ids->at(i_chr));
+			get_R2_per_imputed_genotypes_signal_level(cur_chr_imp_geno_fp, imp_samples_list_fp,
+				cur_chr_known_geno_fp, known_samples_list_fp, stats_fp);
+		} // i_chr loop.
+	} // -get_accuracy_statistics option.
 	if (strcmp(argv[1], "-generate_reduced_state_haplotype_blocks") == 0)
 	{
 		if (argc != 5)
