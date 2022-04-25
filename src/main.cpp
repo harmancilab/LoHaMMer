@@ -289,7 +289,7 @@ Accuracy Evaluation:\n\
 	{
 		if (argc != 11)
 		{
-			fprintf(stderr, "USAGE: %s -extract_genotype_signals_per_VCF [VCF file path] [VCF sample ids list file path (Use EpiLeak to extract)] \
+			fprintf(stderr, "USAGE: %s -extract_genotype_signals_per_VCF [VCF file path] [VCF sample ids list file path] \
 [Variant regions BED file path] [chromosome id to process] \
 [Binary sequence directory (Necessary for ref matching)] [Match reference allele? (0/1)] \
 [Match region names? (0/1)] \
@@ -466,7 +466,88 @@ Accuracy Evaluation:\n\
 
 		convert_genotype_signal_regs_2_VCF(geno_sig_regs_fp, sample_ids_list_fp, phase_op, op_vcf_fp);
 	} // -convert_genotype_signal_regions_2_VCF option.
+	else if (strcmp(argv[1], "-separate_LoHaMMer_jobs") == 0)
+	{
+		if (argc != 5)
+		{
+			fprintf(stderr, "%s -separate_LoHaMMer_jobs [cmd list (stdin for command line input)] [# jobs] [job dir. prefix]\n", argv[0]);
+			exit(0);
+		}
 
+		vector<char*>* cmd_list = buffer_file(argv[2]);
+		if (cmd_list == NULL)
+		{
+			fprintf(stderr, "Could not load the command lines from %s\n", argv[2]);
+			exit(0);
+		}
+
+		int n_jobs = atoi(argv[3]);
+		char* job_dir_prefix = argv[4];		
+
+		char cur_cmd_dir[1000];
+		int i_cmd = 0;
+
+		// Process all the commands.
+		int n_created_dirs = 0;
+		while (i_cmd < cmd_list->size())
+		{
+			// Go over all the directories and save one line per directory job.
+			for (int i_dir = 0;
+				i_cmd < cmd_list->size() &&
+				i_dir < n_jobs;
+				i_dir++)
+			{
+				sprintf(cur_cmd_dir, "%s_%d", job_dir_prefix, i_dir);
+
+				// Create directory.
+				char mkdir_cmd[1000];
+				sprintf(mkdir_cmd, "mkdir %s", cur_cmd_dir);
+				char cur_dir_job_fp[1000];
+				sprintf(cur_dir_job_fp, "%s/job.csh", cur_cmd_dir);
+
+				if (!check_file(cur_dir_job_fp))
+				{
+					system(mkdir_cmd);
+					n_created_dirs++;
+					fprintf(stderr, "Created %s\n", cur_cmd_dir);
+				}
+
+				// Open the job file.
+				FILE* f_cur_dir_job = open_f(cur_dir_job_fp, "a");
+				fprintf(f_cur_dir_job, "%s\n", cmd_list->at(i_cmd));
+				i_cmd++;
+				fclose(f_cur_dir_job);
+			} // i_dir loop.
+		} // cmd's loop.
+
+		// Write the submission script.
+		char submission_script_fp[1000];
+		sprintf(submission_script_fp, "%s_submission_script.csh", job_dir_prefix);
+		FILE* f_sub_script = open_f(submission_script_fp, "w");
+		for (int i_dir = 0; i_dir < n_created_dirs; i_dir++)
+		{
+			sprintf(cur_cmd_dir, "%s_%d", job_dir_prefix, i_dir);
+
+			if (i_dir > 0)
+			{
+				fprintf(f_sub_script, "cd ../%s\nchmod 755 job.csh;nohup ./job.csh > op.txt &\n", cur_cmd_dir);
+			}
+			else
+			{
+				fprintf(f_sub_script, "cd %s\nchmod 755 job.csh;nohup ./job.csh > op.txt &\n", cur_cmd_dir);
+			}
+		} // i_dir loop.
+		fclose(f_sub_script);
+
+		// Change the permission to executable.
+		char chmod_cmd[1000];
+		sprintf(chmod_cmd, "chmod 755 %s", submission_script_fp);
+
+		if (system(chmod_cmd) != 0)
+		{
+			fprintf(stderr, "chmod failed.\n");
+		}
+	} // -separate_write_PBS_job_scripts_per_cmd_list option.
 
 	FILE* f_beacon = open_f("beacon.log", "a");
 	clock_t end_c = clock();

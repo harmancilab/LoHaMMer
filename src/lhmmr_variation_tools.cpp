@@ -17,7 +17,6 @@
 #include <string.h>
 #include "lhmmr_annot_region_tools.h"
 #include "lhmmr_nomenclature.h"
-#include "../../../lib/genomics_utils/alignment/alignment_tools.h"
 #include "lhmmr_file_utils.h"
 #include "lhmmr_genome_sequence_tools.h"
 #include "lhmmr_rng.h"
