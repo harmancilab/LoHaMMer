@@ -1,19 +1,20 @@
 RUN_EAGLE=1
 if [ $RUN_EAGLE == 1 ]
 then
-        EAGLE_BIN=/internal/aharmanci1/dir/PAPER_DATA/SHiMMer_3.13.2021/GIMP/eagle/Eagle_v2.4.1/eagle
-	EAGLE_MAPS=/internal/aharmanci1/dir/PAPER_DATA/SHiMMer_3.13.2021/GIMP/eagle/Eagle_v2.4.1/tables/genetic_map_hg19_withX.txt.gz
-	BCFTOOLS_BIN=/home/aharmanci1/bcftools_installation/installation/bin/bcftools
+	EAGLE_BIN=${PWD}/EAGLE/Eagle_v2.4.1/eagle
+	EAGLE_MAPS=${PWD}/EAGLE//Eagle_v2.4.1/tables/genetic_map_hg19_withX.txt.gz
+	#BCFTOOLS_BIN=/home/aharmanci1/bcftools_installation/installation/bin/bcftools
+	BCFTOOLS_BIN=bcftools
 	MAIN_DATA_DIR=$PWD
 
-                echo "Concatenating tag and target SNVs in the training data."
-                variation_tools -dump_plain_geno_signal_regions ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_training.matbed.gz ${MAIN_DATA_DIR}/training_sample_ids.list 0 tag_snvs_haplocoded.matbed.gz_training.matbed.gz.txt
-                awk 'BEGIN{FS="\t";OFS="\t"}{split($4, arr_sub, "_");prefix_name=arr_sub[1];split($4, arrl, "[");split(arrl[2], arrr, "]");split(arrr[1], alleles, "/");new_name=prefix_name"_"alleles[1]"_"alleles[2];$4=new_name;print $0}' tag_snvs_haplocoded.matbed.gz_training.matbed.gz.txt | sort -u -k2,2 > tag_snvs_haplocoded.matbed.gz_training.matbed.gz.txt_name_fix.txt
+		echo "Concatenating tag and target SNVs in the training data."
+		../bin/LoHaMMer -dump_plain_geno_signal_regions ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_training.matbed.gz ${MAIN_DATA_DIR}/training_sample_ids.list 0 tag_snvs_haplocoded.matbed.gz_training.matbed.gz.txt
+		awk 'BEGIN{FS="\t";OFS="\t"}{split($4, arr_sub, "_");prefix_name=arr_sub[1];split($4, arrl, "[");split(arrl[2], arrr, "]");split(arrr[1], alleles, "/");new_name=prefix_name"_"alleles[1]"_"alleles[2];$4=new_name;print $0}' tag_snvs_haplocoded.matbed.gz_training.matbed.gz.txt | sort -u -k2,2 > tag_snvs_haplocoded.matbed.gz_training.matbed.gz.txt_name_fix.txt
 
-                variation_tools -dump_plain_geno_signal_regions ${MAIN_DATA_DIR}/target_snvs_haplocoded.matbed.gz_training.matbed.gz ${MAIN_DATA_DIR}/training_sample_ids.list 0 target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt
-                cat tag_snvs_haplocoded.matbed.gz_training.matbed.gz.txt_name_fix.txt target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt | sort -u -k2,2 | sort -n -k2,2 > ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt
+		../bin/LoHaMMer -dump_plain_geno_signal_regions ${MAIN_DATA_DIR}/target_snvs_haplocoded.matbed.gz_training.matbed.gz ${MAIN_DATA_DIR}/training_sample_ids.list 0 target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt
+		cat tag_snvs_haplocoded.matbed.gz_training.matbed.gz.txt_name_fix.txt target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt | sort -u -k2,2 | sort -n -k2,2 > ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt
 
-		variation_tools -convert_genotype_signal_regions_2_VCF ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt ${MAIN_DATA_DIR}/training_sample_ids.list 1 ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf
+		../bin/LoHaMMer -convert_genotype_signal_regions_2_VCF ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt ${MAIN_DATA_DIR}/training_sample_ids.list 1 ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf
 
 		# Add the header.
 		echo "##fileformat=VCFv4.1
@@ -49,18 +50,18 @@ then
 		cat vcf_header.txt ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf > ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf_header.vcf
 
 		# Eagle only takes bcf files.
-		bgzip ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf_header.vcf
+		bgzip -f ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf_header.vcf
 		rm -f ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf_header.vcf.gz.tbi
 		tabix -p vcf ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf_header.vcf.gz
 		${BCFTOOLS_BIN} view -Ob -o ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf_header.vcf.gz.bcf ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf_header.vcf.gz
 		${BCFTOOLS_BIN} index ${MAIN_DATA_DIR}/sorted_tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt.vcf_header.vcf.gz.bcf
 
-                variation_tools -dump_plain_geno_signal_regions ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz ${MAIN_DATA_DIR}/testing_sample_ids.list 0 tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt
-                awk 'BEGIN{FS="\t";OFS="\t"}{split($4, arr_sub, "_");prefix_name=arr_sub[1];split($4, arrl, "[");split(arrl[2], arrr, "]");split(arrr[1], alleles, "/");new_name=prefix_name"_"alleles[1]"_"alleles[2];$4=new_name;print $0}' tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt | sort -u -k2,2 > tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt
+        ../bin/LoHaMMer -dump_plain_geno_signal_regions ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz ${MAIN_DATA_DIR}/testing_sample_ids.list 0 tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt
+        awk 'BEGIN{FS="\t";OFS="\t"}{split($4, arr_sub, "_");prefix_name=arr_sub[1];split($4, arrl, "[");split(arrl[2], arrr, "]");split(arrr[1], alleles, "/");new_name=prefix_name"_"alleles[1]"_"alleles[2];$4=new_name;print $0}' tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt | sort -u -k2,2 > tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt
 
-		variation_tools -convert_genotype_signal_regions_2_VCF tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt ${MAIN_DATA_DIR}/testing_sample_ids.list 0 ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt.vcf
+		../bin/LoHaMMer -convert_genotype_signal_regions_2_VCF tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt ${MAIN_DATA_DIR}/testing_sample_ids.list 0 ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt.vcf
 		cat vcf_header.txt ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt.vcf > ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt.vcf_header.vcf
-		bgzip ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt.vcf_header.vcf
+		bgzip -f ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt.vcf_header.vcf
 		rm -f ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt.vcf_header.vcf.gz.tbi
 		tabix -p vcf ${MAIN_DATA_DIR}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt_name_fix.txt.vcf_header.vcf.gz
 

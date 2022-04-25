@@ -1,10 +1,47 @@
 #!/bin/bash
 
+if [[ $# -lt 1 ]]
+then
+	echo "USAGE: $0 [option]
+Options:
+	-get_typed_vars
+	-get_parse_1kG
+	-parse_tag_target
+	-build_query_reference_panels
+	-eagle_phase_typed_variants
+	-run_vicinity_HMM
+	-get_R2_stats"
+
+	exit
+fi
+
+cmd_option=$1
+
 KG_dir=1kG_DATA
+
+sed -i $'s/\r$//' run_eagle.sh
+chmod 755 run_eagle.sh
+
+# Check eagle.
+if [[ ! -d "EAGLE/Eagle_v2.4.1" ]]
+then
+	sed -i $'s/\r$//' EAGLE/get_eagle.sh
+	chmod 755 EAGLE/get_eagle.sh
+	echo "You need to download eagle2.4.1 under EAGLE/"
+	exit
+fi
+
+# Extract the common SNVs.
+min_MAF=0.05
+
+# Sizes of query and reference panels.
+N_TRAINING=200
+N_TESTING=10
 
 # Download the Illumina Duo V3 manifest.
 PARSE_ILLUMINADUOV3_MANIFEST=1
-if [ ${PARSE_ILLUMINADUOV3_MANIFEST} == 1 ]
+#if [ ${PARSE_ILLUMINADUOV3_MANIFEST} == 1 ]
+if [[ ${cmd_option} == "-get_typed_vars" ]]
 then
         wget -c ftp://webdata2:webdata2@ussd-ftp.illumina.com/MyIllumina/c1859532-43c5-4df2-a1b4-c9f0374476d2/Human1M-Duov3_H.csv
 
@@ -16,34 +53,39 @@ then
         exit
 fi
 
-KG_PARSE=1
-if [ ${KG_PARSE} == 1 ]
+#KG_PARSE=1
+if [[ ${cmd_option} == "-get_parse_1kG" ]]
 then
 	mkdir $KG_dir
 
-        echo "Downloading data"
-        wget -c ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/release/20130502/ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz
-        gzip -cd ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz | awk 'BEGIN{FS="\t"}{if($1=="#CHROM"){for(i=10;i<=NF;i++){print $i};exit}}' > 1kg_sample_ids.list
+	wget https://hgdownload.cse.ucsc.edu/admin/exe/linux.x86_64/fetchChromSizes
+	chmod 755 fetchChromSizes
+	./fetchChromSizes hg19 > hg19.list
 
-        # Extract the common SNVs.
-        echo "Parsing min MAF regions"
-        min_MAF=0.01
-        gzip -cd ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz | awk -v min_MAF=${min_MAF} {'curAF=0;split($8, arr, ";");for(i=1; i <= length(arr); i++){split(arr[i], arr2, "=");if(arr2[1]=="AF"){curAF=arr2[2];break;}};curMAF=curAF;if(curAF>0.5){curMAF=1-curAF;};if(curMAF>min_MAF && $1==20 && length($4)==1 && length($5)==1)print $1"\t"$2-1"\t"$2"\t"$3"_"$4"_"$5"_"curAF"\t.\t+"'} > snv_region_${min_MAF}.bed
+    echo "Downloading data"
+    wget -c ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/release/20130502/ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz
+    gzip -cd ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz | awk 'BEGIN{FS="\t"}{if($1=="#CHROM"){for(i=10;i<=NF;i++){print $i};exit}}' > ${KG_dir}/1kg_sample_ids.list
 
-        # Extract the matrix.
-        echo "Extracting MAF > ${min_MAF} variants on snv_region_${min_MAF}.bed"
-        gzip -cd ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz | awk {'if($1==20 && length($4)==1 && length($5)==1)print $0'} | ./bin/LoHaMMer -extract_genotype_signals_per_VCF stdin 1kg_sample_ids.list snv_region_${min_MAF}.bed hg19.list nogenome 0 1 $KG_DIR/ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz_haplocoded.matbed.gz
+    # Extract the common SNVs.
+    echo "Parsing min MAF regions"
+    gzip -cd ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz | awk -v min_MAF=${min_MAF} {'curAF=0;split($8, arr, ";");for(i=1; i <= length(arr); i++){split(arr[i], arr2, "=");if(arr2[1]=="AF"){curAF=arr2[2];break;}};curMAF=curAF;if(curAF>0.5){curMAF=1-curAF;};if(curMAF>min_MAF && $1==20 && length($4)==1 && length($5)==1)print $1"\t"$2-1"\t"$2"\t"$3"_"$4"_"$5"_"curAF"\t.\t+"'} > snv_region_${min_MAF}.bed
+
+    # Extract the matrix.
+    echo "Extracting MAF > ${min_MAF} variants on snv_region_${min_MAF}.bed"
+    gzip -cd ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz | awk {'if($1==20 && length($4)==1 && length($5)==1)print $0'} | ../bin/LoHaMMer -extract_genotype_signals_per_VCF stdin ${KG_dir}/1kg_sample_ids.list snv_region_${min_MAF}.bed hg19.list nogenome 0 1 1 $KG_dir/ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz_haplocoded.matbed.gz
 
 	exit
 fi
 
-
-PARSE_TAG_TARGET_SNPs=0
-if [ ${PARSE_TAG_TARGET_SNPs} == 1 ]
+if [[ ! -d "${KG_dir}" ]]
 then
-	# Extract the common SNVs.
-	min_MAF=0.01
+	echo "Could not find 1kG directory @ ${KG_dir}/"
+	exit
+fi
 
+#PARSE_TAG_TARGET_SNPs=0
+if [[ ${cmd_option} == "-parse_tag_target" ]]
+then
 	# Extract the tag and target SNP matrices.
 	echo "Extracting the genotypes for the tag SNVs"
 	../bin/LoHaMMer -extract_genotype_signals_per_region_list ${KG_dir}/ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz_haplocoded.matbed.gz ${KG_dir}/1kg_sample_ids.list Human1M-Duov3_H.csv_SNV_loci.bed tag_snvs_haplocoded.matbed.gz	
@@ -62,13 +104,9 @@ then
 	exit
 fi
 
-N_TRAINING=1000
-N_TESTING=200
-
-BUILD_TAG_TARGET_TRAINING_TESTING_DATA=0
-if [ ${BUILD_TAG_TARGET_TRAINING_TESTING_DATA} == 1 ]
+if [[ ${cmd_option} == "-build_query_reference_panels" ]]
 then
-	echo "Separating data"
+	echo "Building query/reference panels."
 
 	GET_NEW_TRAINING_TESTING=1
 	if [ ${GET_NEW_TRAINING_TESTING} == 1 ]
@@ -105,8 +143,7 @@ then
 fi
 
 # Run EAGLE; Update the tag data.
-RUN_EAGLE=0
-if [ $RUN_EAGLE == 1 ]
+if [[ ${cmd_option} == "-eagle_phase_typed_variants" ]]
 then
 	./run_eagle.sh
 
@@ -119,62 +156,70 @@ then
 	exit
 fi
 
-RUN_HMM=1
-if [ $RUN_HMM == 1 ]
+if [[ ${cmd_option} == "-run_vicinity_HMM" ]]
 then
-	#snp_pos=`grep "rs139969097_G_C_0.0101837" "tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt" | cut -f2`
-
-	#l_vic=5000000
-	#awk -v snp_pos=$snp_pos -v l_vic=$l_vic {'if($2>snp_pos-l_vic && $2<snp_pos+l_vic){print $0}'} tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt > tag_target_ref_geno.txt
-        #awk -v snp_pos=$snp_pos -v l_vic=$l_vic {'if($2>snp_pos-l_vic && $2<snp_pos+l_vic){print $0}'} tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt > tag_testing_ref_geno.txt
-
 	focus_start=25000000
 	focus_end=35000000
 	l_win=250000
 	starts=`seq $focus_start $l_win $focus_end`
 
+	cur_win_cM=0.3
+	cur_N_e=10000
+	cur_l_center_2_target_buffer=0.05
+	l_block=10
+	lin_scaler=0.2
+	math_mode=1
+	posterior_mode=0
+	max_n_vars=500
+
+	n_parallel_jobs=60
+
         RUN_FOREBACK_STATE_REDUCTION=1
         if [ $RUN_FOREBACK_STATE_REDUCTION == 1 ]
         then
+                rm -f temp_imp_cmds.sh
+                for cur_start in ${starts[@]}
+                do
+                        echo "Processing ${cur_start}"
+                        cur_end=`awk -v l_win=$l_win -v cur_start=$cur_start 'BEGIN{print cur_start+l_win}'`
+                        echo "echo -e \"20\\t${focus_start}\\t${focus_end}\" > focus_reg.bed;${PWD}/../bin/LoHaMMer -run_GIMP_sliding_window_ForeBack_State_Reduction ${PWD}/tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt ${PWD}/training_sample_ids.list ${PWD}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt ${PWD}/testing_sample_ids.list ${PWD}/target_snvs_haplocoded.matbed.gz_testing.matbed.gz ${cur_win_cM} ${PWD}/genetic_maps ./focus_reg.bed ${math_mode} ${lin_scaler} ${l_block} ${max_n_vars} ${cur_N_e} ${posterior_mode} ${cur_l_center_2_target_buffer} gimp_${cur_win_cM}_${cur_N_e}_${cur_l_center_2_target_buffer}_${max_n_vars}_cur_start.probs" >> temp_imp_cmds.sh
+                done
+
+                rm -f -r q_foreback_*
+                ../bin/LoHaMMer -separate_LoHaMMer_jobs temp_imp_cmds.sh ${n_parallel_jobs} q_foreback
+
+                exit
+    fi
+
+	RUN_VITERBI_STATE_REDUCTION=1
+	if [ $RUN_VITERBI_STATE_REDUCTION == 1 ]
+	then
 		rm -f temp_imp.sh
 		for cur_start in ${starts[@]}
 		do
 			cur_end=`awk -v l_win=$l_win -v cur_start=$cur_start 'BEGIN{print cur_start+l_win}'`
-			#print win_cMs[1]"\t"N_e[i]"\t"l_center_2_target_buffers[1]"\t"l_block"\t"lin_scaler"\t"math_mode"\t"posterior_mode
-			awk -f enumerate_parameters.awk | awk -v workdir=$PWD -v cur_start=$cur_start -v cur_end=$cur_end 'BEGIN{FS="\t"}{cur_win_cM=$1;cur_N_e=$2;cur_l_center_2_target_buffer=$3;l_block=$4;lin_scaler=$5;math_mode=$6;posterior_mode=$7;max_n_vars=$8;print "echo -e \"20\\t"cur_start"\\t"cur_end"\" > focus_reg.bed;/usr/bin/time -o timing_memory.log --append -f %e\"\\t\"%M SHiMMer -run_GIMP_sliding_window_ForeBack_State_Reduction "workdir"/tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt "workdir"/training_sample_ids.list "workdir"/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt "workdir"/testing_sample_ids.list "workdir"/target_snvs_haplocoded.matbed.gz_testing.matbed.gz "cur_win_cM" "workdir"/genetic_maps focus_reg.bed "math_mode" "lin_scaler" "l_block" "max_n_vars" "cur_N_e" "posterior_mode" "cur_l_center_2_target_buffer" gimp_"cur_win_cM"_"cur_N_e"_"cur_l_center_2_target_buffer"_"max_n_vars"_"cur_start".probs"}' >> temp_imp.sh
+			echo "echo -e \"20\\t${focus_start}\\t${focus_end}\" > focus_reg.bed;${PWD}/../bin/LoHaMMer -run_GIMP_sliding_window_Viterbi_State_Reduction ${PWD}/tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt ${PWD}/training_sample_ids.list ${PWD}/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt ${PWD}/testing_sample_ids.list ${PWD}/target_snvs_haplocoded.matbed.gz_testing.matbed.gz ${cur_win_cM} ${PWD}/genetic_maps ./focus_reg.bed ${math_mode} ${lin_scaler} ${l_block} ${max_n_vars} ${cur_N_e} ${posterior_mode} ${cur_l_center_2_target_buffer} gimp_${cur_win_cM}_${cur_N_e}_${cur_l_center_2_target_buffer}_${max_n_vars}_cur_start.probs" >> temp_imp_cmds.sh
 		done
 
 		cat temp_imp.sh | sort -u > temp
 		mv temp temp_imp.sh
 
-		rm -f -r q_foreback_reduc*
-		job_tools -separate_write_PBS_job_scripts_per_cmd_list temp_imp.sh q_foreback_reduc 60 -1 -1 -1 -1
+        rm -f -r q_viterbimp_*
+        ../bin/LoHaMMer -separate_write_PBS_job_scripts_per_cmd_list temp_imp.sh ${n_parallel_jobs} q_viterbimp
 
 		exit
-        fi
-
-	RUN_VITERBI_STATE_REDUCTION=1
-        if [ $RUN_VITERBI_STATE_REDUCTION == 1 ]
-        then
-                rm -f temp_imp.sh
-		for cur_start in ${starts[@]}
-		do
-			cur_end=`awk -v l_win=$l_win -v cur_start=$cur_start 'BEGIN{print cur_start+l_win}'`
-			#print win_cMs[1]"\t"N_e[i]"\t"l_center_2_target_buffers[1]"\t"l_block"\t"lin_scaler"\t"math_mode"\t"posterior_mode
-			awk -f enumerate_parameters.awk | awk -v workdir=$PWD -v cur_start=$cur_start -v cur_end=$cur_end 'BEGIN{FS="\t"}{cur_win_cM=$1;cur_N_e=$2;cur_l_center_2_target_buffer=$3;l_block=$4;lin_scaler=$5;math_mode=$6;posterior_mode=$7;max_n_vars=$8;print "echo -e \"20\\t"cur_start"\\t"cur_end"\" > focus_reg.bed;/usr/bin/time -o timing_memory.log --append -f %e\"\\t\"%M SHiMMer -run_GIMP_sliding_window_Viterbi_State_Reduction "workdir"/tag_target_snvs_haplocoded.matbed.gz_training.matbed.gz.txt "workdir"/training_sample_ids.list "workdir"/tag_snvs_haplocoded.matbed.gz_testing.matbed.gz.txt "workdir"/testing_sample_ids.list "workdir"/target_snvs_haplocoded.matbed.gz_testing.matbed.gz "cur_win_cM" "workdir"/genetic_maps focus_reg.bed "math_mode" "lin_scaler" "l_block" "max_n_vars" "cur_N_e" "posterior_mode" "cur_l_center_2_target_buffer" gimp_"cur_win_cM"_"cur_N_e"_"cur_l_center_2_target_buffer"_"max_n_vars"_"cur_start".probs"}' >> temp_imp.sh
-		done
-
-		cat temp_imp.sh | sort -u > temp
-		mv temp temp_imp.sh
-
-                rm -f -r q_viterbimp_reduc*
-                job_tools -separate_write_PBS_job_scripts_per_cmd_list temp_imp.sh q_viterbimp_reduc 60 -1 -1 -1 -1
-
-		exit
-        fi
+	fi
 
 fi
 
+if [[ ${cmd_option} == "-get_R2_stats" ]]
+then
+	echo "Pooling genotype probabilities.."
+	find . -maxdepth 2 -name 'gimp_*.probs' | grep q_foreback | xargs -Ifiles cat files | sort -u > gimp.probs
 
+	echo "Computing R2 statistics.."
+	rm -f R2_stats.txt
+	../bin/LoHaMMer -get_R2_per_GIMP_4entry_allelic_probs gimp.probs testing_sample_ids.list sorted_target_snvs_genocoded.matbed.gz_testing.matbed.gz.txt testing_sample_ids.list
+fi
 
 
